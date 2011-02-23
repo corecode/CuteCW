@@ -66,9 +66,10 @@ void Generator::appendDataFrom(const Generator *copyFrom) {
 	putShort(&newbuf[i], val + trailval);
     }
 
-    len += copyFrom->len;
-    bytes_left += copyFrom->len;
+    int old_trailing = trailing;
     trailing = trailing < copyFrom->len ? copyFrom->trailing : (trailing - copyFrom->len);
+    len += copyFrom->len - old_trailing + trailing;
+    bytes_left += copyFrom->len - old_trailing + trailing;
     delete buffer;
     buffer = t = newbuf;
     // qDebug() << "new left: "<< bytes_left;
@@ -159,7 +160,7 @@ qint64 Generator::readData(char *data, qint64 maxlen)
 #ifdef ALWAYS_FILL_WITH_SPACE
     if (bytes_left <= 0) {
         // should really only be needed on linux with 4.7 I suspect
-        memset(data, 0, maxlen);
+	    memset(data, 0, maxlen);
         bytes_left = -1;
         return maxlen;
     }
