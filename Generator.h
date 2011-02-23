@@ -23,6 +23,7 @@ public:
 
     char *t;
     int  len;
+    int  trailing;
     int  pos;
     char *buffer;
     bool finished;

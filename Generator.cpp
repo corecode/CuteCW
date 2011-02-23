@@ -21,6 +21,7 @@ Generator::Generator(float secs, int freq)
     m_freq = freq;
     len=fillData(t, m_freq, secs); /* mono FREQHz sine */
     pos   = 0;
+    trailing = 0;
     bytes_left = len;
 }
 
@@ -33,6 +34,7 @@ Generator::Generator(Generator *copyFrom)
     m_freq = copyFrom->m_freq;
     len = copyFrom->len;
     pos = 0;
+    trailing = copyFrom->trailing;
     bytes_left = len;
 }
 
@@ -48,14 +50,25 @@ void Generator::clearBuffer() {
     t = buffer;
     len = bytes_left = 4;
     pos = 0;
+    trailing = 0;
 }
 
 void Generator::appendDataFrom(const Generator *copyFrom) {
-    char *newbuf = new char[len + copyFrom->len];
-    memcpy(newbuf, buffer, len);
-    memcpy(newbuf + len, copyFrom->buffer, copyFrom->len);
+    char *newbuf = new char[len + copyFrom->len - trailing];
+    memcpy(newbuf, buffer, len - trailing);
+    memcpy(newbuf + len - trailing, copyFrom->buffer, copyFrom->len);
+
+    // merge our trailing data with the new data
+    for (int i = len - trailing; i < len && i < len + copyFrom->len - trailing; i += 2) {
+	int val = (int)((unsigned char)newbuf[i] + ((unsigned char)newbuf[i + 1] << 8));
+	int trailval = (int)((unsigned char)buffer[i] + ((unsigned char)buffer[i + 1] << 8));
+
+	putShort(&newbuf[i], val + trailval);
+    }
+
     len += copyFrom->len;
     bytes_left += copyFrom->len;
+    trailing = trailing < copyFrom->len ? copyFrom->trailing : (trailing - copyFrom->len);
     delete buffer;
     buffer = t = newbuf;
     // qDebug() << "new left: "<< bytes_left;
@@ -73,6 +86,7 @@ void Generator::stop()
 
 int Generator::putShort(char *t, unsigned int value)
 {
+    // qDebug() << (int)value;
     *(unsigned char *)(t++)=value&255;
     *(unsigned char *)(t)=(value/256)&255;
     return 2;
@@ -82,24 +96,36 @@ int Generator::fillData(char *start, int frequency, float seconds)
 {
     int i, len=0;
     int value;
-    int ramp_samples = (int)(8e-3 * SYSTEM_FREQ); // ramp for 8ms
-    int total_samples = int(seconds*SYSTEM_FREQ);
-    
+    int signal_samples = int(seconds*SYSTEM_FREQ);
+    double slope = 4e-3;	// 4ms nominal slope time
+
+    // The envelope wave form extends past the beginning and the end.
+    // 3 times the slope length is a good estimate for a bound (~0.0002).
+    double extra_time = 3 * slope;
+    int extra_samples = extra_time * SYSTEM_FREQ;
+
+    int total_samples = signal_samples + 2 * extra_samples;
     for(i=0; i<total_samples; i++) {
         if (frequency == 0.0)
             value = 0;
         else
             value=(int)(32767.0*sin(2.0*M_PI*((double)(i))*(double)(frequency)/SYSTEM_FREQ));
-	if (i < ramp_samples || total_samples - i <= ramp_samples) {
-            int filter_sample = i < ramp_samples ? i : (total_samples - i - 1);
-            double filter = (1 - cos(M_PI * (double)filter_sample / (double)ramp_samples)) / 2;
 
-            value *= filter;
-        }
+        // use an optimized envelope, according to
+        // http://fermi.la.asu.edu/w9cf/articles/click/index.html
+
+	// shift the envelope so that we start at 0, scale to right erf dimension
+	double fi = (double)i / SYSTEM_FREQ - extra_time;
+    	double filter = 0.5 * (erf(fi/slope) -
+    			       erf((fi - seconds)/slope));
+
+    	value *= filter;
+	
         putShort(start, value);
         start += 2;
         len+=2;
     }
+    trailing = extra_samples * 2 * 2;
     bytes_left = len;
     pos = 0;
     return len;
