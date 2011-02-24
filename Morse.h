@@ -2,7 +2,7 @@
 #define MORSE_H
 
 #include <QtCore/QString>
-#include <QtMultimedia/QAudioOutput>
+#include <QAudioOutput>
 #include <QtCore/QMap>
 #include <QtCore/QList>
 #include <QtGui/QLabel>

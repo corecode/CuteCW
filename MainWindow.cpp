@@ -1,7 +1,7 @@
 #include "MainWindow.h"
 #include "ui_MainWindow.h"
 #include "ui_AboutDialog.h"
-#include <QtMultimedia/QAudioFormat>
+#include <QAudioFormat>
 #include <QtGui/QMenu>
 #include <QtGui/QMenuBar>
 #include <QtGui/QIcon>
