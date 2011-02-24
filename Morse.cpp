@@ -172,10 +172,6 @@ void Morse::keyPressed(QChar newletter) {
     m_modes[m_gameMode]->handleKeyPress(newletter);
 }
 
-void Morse::generatorDone() {
-    audioFinished(QAudio::StoppedState); // fixes windows issues
-}
-
 void Morse::setAudioMode(AudioMode newmode) {
     m_playingMode = newmode;
 }
@@ -341,7 +337,6 @@ Morse::_createTones()
     if (!m_playBuffer) {
         m_playBuffer = new Generator(m_pause);
         m_playBuffer->start();
-        connect(m_playBuffer, SIGNAL(generatorDone()), this, SLOT(generatorDone()), Qt::QueuedConnection);
     }
 
     connect(m_audioOutput, SIGNAL(stateChanged(QAudio::State)), this, SLOT(audioFinished(QAudio::State)));

@@ -103,7 +103,6 @@ public slots:
     void playSequence();
     QTime maybePlaySequence(bool addPause = false);
 
-    void generatorDone();
     void audioFinished(QAudio::State state);
     void keyPressed(QString newtext);
     void keyPressed(QChar key);
