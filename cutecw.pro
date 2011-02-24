@@ -4,10 +4,17 @@
 #
 #-------------------------------------------------
 
-QT       += core gui
-
 TARGET = cutecw
 TEMPLATE = app
+
+QT       += core gui
+
+maemo5 {
+QT       += multimedia
+} else {
+CONFIG   += mobility
+MOBILITY += multimedia
+}
 
 RESOURCES = cutecw.qrc
 
@@ -71,9 +78,6 @@ HEADERS  += MainWindow.h \
     GoalBar.h
 
 FORMS    += AboutDialog.ui
-
-CONFIG += mobility
-MOBILITY += multimedia
 
 symbian {
     TARGET.UID3 = 0xe0df144b
