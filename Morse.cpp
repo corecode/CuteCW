@@ -129,15 +129,7 @@ Morse::playSequence()
     m_playBuffer->restartData();
     m_playBuffer->start();
     m_playingMode = PLAYING;
-    if (m_audioOutput->error() != QAudio::NoError) {
-        // on OS X especially, this is needed on a regular basis.
-        // (on OS X, it's every time the audio pauses)
-        m_audioOutput = m_parent->createAudioOutput();
-    }
-    
-    
     m_audioOutput->start(m_playBuffer);
-    return;
 }
 
 QTime Morse::sequenceTime() {
@@ -178,10 +170,6 @@ void Morse::playButton() {
 
 void Morse::keyPressed(QChar newletter) {
     m_modes[m_gameMode]->handleKeyPress(newletter);
-}
-
-void Morse::generatorDone() {
-    audioFinished(QAudio::StoppedState); // fixes windows issues
 }
 
 void Morse::setAudioMode(AudioMode newmode) {
@@ -349,7 +337,6 @@ Morse::_createTones()
     if (!m_playBuffer) {
         m_playBuffer = new Generator(m_pause);
         m_playBuffer->start();
-        connect(m_playBuffer, SIGNAL(generatorDone()), this, SLOT(generatorDone()), Qt::QueuedConnection);
     }
 
     connect(m_audioOutput, SIGNAL(stateChanged(QAudio::State)), this, SLOT(audioFinished(QAudio::State)));

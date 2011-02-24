@@ -2,7 +2,7 @@
 #define MORSE_H
 
 #include <QtCore/QString>
-#include <QtMultimedia/QAudioOutput>
+#include <QAudioOutput>
 #include <QtCore/QMap>
 #include <QtCore/QList>
 #include <QtGui/QLabel>
@@ -103,7 +103,6 @@ public slots:
     void playSequence();
     QTime maybePlaySequence(bool addPause = false);
 
-    void generatorDone();
     void audioFinished(QAudio::State state);
     void keyPressed(QString newtext);
     void keyPressed(QChar key);

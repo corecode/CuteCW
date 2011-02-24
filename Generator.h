@@ -32,9 +32,6 @@ public:
     int  m_zerocount;
     qint64 bytes_left;
 
-signals:
-    void generatorDone();
-
 public slots:
     void restartData();
 

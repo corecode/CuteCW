@@ -147,37 +147,11 @@ qint64 Generator::readData(char *data, qint64 maxlen)
     //qDebug() << "left: " << bytes_left << " / wanted: " << len;
 
     if (bytes_left == 0) {
-        emit generatorDone();
-    }
-
-#ifdef Q_OS_LINUX
-    // On linux (with Qt 4.7 and 4.7.1) there is a nasty second-long pause/freeze after the audio finishes playing
-#define ALWAYS_FILL_WITH_SPACE 1
-#else
-#define FILL_WITH_SPACE_ONCE 0
-#endif
-
-#ifdef ALWAYS_FILL_WITH_SPACE
-    if (bytes_left <= 0) {
-        // should really only be needed on linux with 4.7 I suspect
-	    memset(data, 0, maxlen);
         bytes_left = -1;
-        return maxlen;
-    }
-#elif FILL_WITH_SPACE_ONCE
-    /* fill with a blank space just once after the starting */
-    if (bytes_left < 0) {
-        memset(data, 0, maxlen);
-        bytes_left = -1;
-        return maxlen;
-    }
-#else
-    /* this is how it *should* be done, if the Qt output buffers didn't truncate things */
-    if (bytes_left == 0)
-        bytes_left = -1;
-    if (bytes_left <= 0)
+        return 0;
+    } else if (bytes_left == -1) {
         return -1;
-#endif
+    }
 
     if (len < bytes_left) {
         // Normal
