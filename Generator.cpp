@@ -1,6 +1,7 @@
 #include "Generator.h"
 #include <qdebug.h>
 #include <QtGlobal>
+#include <QtCore/QtEndian>
 #include <QtCore/QTime>
 
 #include <math.h>
@@ -15,64 +16,46 @@
 Generator::Generator(float secs, int freq)
     :QIODevice( )
 {
-    finished = false;
-    buffer = new char[int(secs * SYSTEM_FREQ * 4) + 3000];
-    t=buffer;
     m_freq = freq;
-    len=fillData(t, m_freq, secs); /* mono FREQHz sine */
-    pos   = 0;
-    trailing = 0;
-    bytes_left = len;
+    fillData(m_freq, secs); /* mono FREQHz sine */
 }
 
 Generator::Generator(Generator *copyFrom)
-    : QIODevice()
+    : QIODevice(), buffer(copyFrom->buffer)
 {
-    buffer = new char[copyFrom->len];
-    memcpy(buffer, copyFrom->buffer, copyFrom->len);
-    t = buffer;
     m_freq = copyFrom->m_freq;
-    len = copyFrom->len;
     pos = 0;
+    finished = false;
     trailing = copyFrom->trailing;
-    bytes_left = len;
 }
 
 Generator::~Generator()
 {
-    delete [] buffer;
 }
 
 void Generator::clearBuffer() {
-    delete buffer;
-    buffer = new char[4];
-    buffer[0] = buffer[1] = buffer[2] = buffer[3] = 0;
-    t = buffer;
-    len = bytes_left = 4;
-    pos = 0;
+    buffer.clear();
     trailing = 0;
+    pos = 0;
 }
 
 void Generator::appendDataFrom(const Generator *copyFrom) {
-    char *newbuf = new char[len + copyFrom->len - trailing];
-    memcpy(newbuf, buffer, len - trailing);
-    memcpy(newbuf + len - trailing, copyFrom->buffer, copyFrom->len);
-
-    // merge our trailing data with the new data
-    for (int i = len - trailing; i < len && i < len + copyFrom->len - trailing; i += 2) {
-	int val = (int)((unsigned char)newbuf[i] + ((unsigned char)newbuf[i + 1] << 8));
-	int trailval = (int)((unsigned char)buffer[i] + ((unsigned char)buffer[i + 1] << 8));
-
-	putShort(&newbuf[i], val + trailval);
+    // merge our trailing and the other data, but never merge to the past.
+    int offs = qMax(buffer.size() - trailing, pos);
+    int after_trailing = qMin(buffer.size() - offs, copyFrom->buffer.size());
+    for (int i = 0; i < after_trailing; ++i) {
+	buffer[offs + i] = qToLittleEndian(
+	    qFromLittleEndian(buffer[offs + i]) +
+	    qFromLittleEndian(copyFrom->buffer[i]));
     }
 
-    int old_trailing = trailing;
-    trailing = trailing < copyFrom->len ? copyFrom->trailing : (trailing - copyFrom->len);
-    len += copyFrom->len - old_trailing + trailing;
-    bytes_left += copyFrom->len - old_trailing + trailing;
-    delete buffer;
-    buffer = t = newbuf;
-    // qDebug() << "new left: "<< bytes_left;
+    // append the rest of the other data
+    buffer << copyFrom->buffer.mid(after_trailing);
+
+    trailing = qMax(copyFrom->trailing,
+		    buffer.size() - offs - (copyFrom->buffer.size() - copyFrom->trailing));
+    if (copyFrom->buffer.size() > 0)
+	finished = false;
 }
 
 void Generator::start()
@@ -85,17 +68,9 @@ void Generator::stop()
     close();
 }
 
-int Generator::putShort(char *t, unsigned int value)
+void Generator::fillData(int frequency, float seconds)
 {
-    // qDebug() << (int)value;
-    *(unsigned char *)(t++)=value&255;
-    *(unsigned char *)(t)=(value/256)&255;
-    return 2;
-}
-
-int Generator::fillData(char *start, int frequency, float seconds)
-{
-    int i, len=0;
+    int i;
     int value;
     int signal_samples = int(seconds*SYSTEM_FREQ);
     double slope = 4e-3;	// 4ms nominal slope time
@@ -121,20 +96,24 @@ int Generator::fillData(char *start, int frequency, float seconds)
     			       erf((fi - seconds)/slope));
 
     	value *= filter;
-	
-        putShort(start, value);
-        start += 2;
-        len+=2;
+
+	buffer << qToLittleEndian(value);
     }
-    trailing = extra_samples * 2 * 2;
-    bytes_left = len;
-    pos = 0;
-    return len;
+
+    trailing = extra_samples * 2;
+    finished = false;
+
+#define ADD_SILENCE 100e-3	// add 100ms trailing silence
+#if defined(ADD_SILENCE)
+    for (i = 0; i < ADD_SILENCE * SYSTEM_FREQ; ++i) {
+	buffer << 0;
+	trailing++;
+    }
+#endif
 }
 
 void Generator::restartData()
 {
-    bytes_left = len;
     pos = 0;
 }
 
@@ -144,29 +123,26 @@ qint64 Generator::readData(char *data, qint64 maxlen)
     if (len > 65536)
         len = 65536;
 
-    //qDebug() << "left: " << bytes_left << " / wanted: " << len;
+    const qint16 *src = &buffer.constData()[pos];
 
-    if (bytes_left == 0) {
-        bytes_left = -1;
+    len /= sizeof(*src);
+
+    if (finished)
+	return -1;
+
+    if (pos >= buffer.size()) {
+	finished = true;
         return 0;
-    } else if (bytes_left == -1) {
-        return -1;
     }
 
-    if (len < bytes_left) {
-        // Normal
-        memcpy(data, t+pos, len);
-        pos += len;
-        bytes_left -= len;
-        return len;
-    } else {
-        // Whats left
-        memcpy(data, t+pos, bytes_left);
-        int to_return = bytes_left;
-        bytes_left = 0;
-        pos=0;
-        return to_return;
-    }
+    finished = false;
+    len = qMin(len, buffer.size() - pos);
+
+    qint64 byte_len = len * sizeof(*src);
+    memcpy(data, src, len * sizeof(*src));
+    pos += len;
+
+    return byte_len;
 }
 
 qint64 Generator::writeData(const char *data, qint64 len)
@@ -179,7 +155,9 @@ qint64 Generator::writeData(const char *data, qint64 len)
 
 QTime Generator::timeLeft()
 {
-    int secs = bytes_left/2/SYSTEM_FREQ;
-    int msec = ((bytes_left - 2*SYSTEM_FREQ*secs)*1000)/2/SYSTEM_FREQ;
+    int samples_left = buffer.size() - pos;
+
+    int secs = samples_left / SYSTEM_FREQ;
+    int msec = samples_left % SYSTEM_FREQ * 1000 / SYSTEM_FREQ;
     return QTime(0, 0, secs, msec);
 }

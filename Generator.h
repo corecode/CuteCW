@@ -3,6 +3,7 @@
 
 #include <QtCore/QIODevice>
 #include <QtCore/QTime>
+#include <QVector>
 
 class Generator : public QIODevice
 {
@@ -21,16 +22,11 @@ public:
     void restartPauses();
     void setupPauses();
 
-    char *t;
-    int  len;
     int  trailing;
     int  pos;
-    char *buffer;
     bool finished;
-    int  chunk_size;
+    QVector<qint16> buffer;
     int  m_freq;
-    int  m_zerocount;
-    qint64 bytes_left;
 
 public slots:
     void restartData();
@@ -39,8 +35,7 @@ public slots:
     qint64 writeData(const char *data, qint64 len);            
 
 private:
-    int putShort(char *t, unsigned int value);
-    int fillData(char *start, int frequency, float seconds);
+    void fillData(int frequency, float seconds);
 };
 
 
