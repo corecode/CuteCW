@@ -139,7 +139,7 @@ qint64 Generator::readData(char *data, qint64 maxlen)
     len = qMin(len, buffer.size() - pos);
 
     qint64 byte_len = len * sizeof(*src);
-    memcpy(data, src, len * sizeof(*src));
+    memcpy(data, src, byte_len);
     pos += len;
 
     return byte_len;
